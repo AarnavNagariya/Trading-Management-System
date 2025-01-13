@@ -1,0 +1,1 @@
+/usr/bin/c++ -Wl,--dependency-file=CMakeFiles/TradingClient.dir/link.d CMakeFiles/TradingClient.dir/src/main_optimized_more.cpp.o -o TradingClient  /usr/lib/libcurl.so /usr/lib/libssl.so /usr/lib/libcrypto.so
