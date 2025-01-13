@@ -1,175 +1,221 @@
-# Trading Client Project
+# System Requirements and Installation Guide
 
-## Overview
-This project implements a trading client for interacting with the Deribit API. It supports functionalities such as authentication, market data subscription, order placement, and retrieving open orders. The client uses cURL for HTTP request and WebSocket for real-time communication and data processing.
+## Operating System Support
+- Linux (Ubuntu 20.04+, CentOS 7+)
+- macOS (10.15+)
+- Windows (10/11 with MinGW or MSVC)
 
+## Core Requirements
 
-## Requirements
-### System Requirements
-- Operating System: Linux(Ubuntu)
-- Compiler: GCC (recommended) or any C++ compiler with c++17 support.
-- Build Tool: CMake 3.10 or later
-- Network: Stable internet connection for API access.
+### 1. C++ Compiler
+- GCC 8.3+ or
+- Clang 10+ or
+- MSVC 19.20+ (Visual Studio 2019+)
 
-### Dependencies
-The following libraries and tools are required to build and run the project:
-
-1. **[cURL](https://curl.se/download.html)**:
-   - Used for making jsonRPC HTTP requests.
-   - **Installation**:
-     - Linux: 
+Installation:
 ```bash
-sudo apt install libcurl4-openssl-dev
-```
-     
+# Ubuntu/Debian
+sudo apt-get update
+sudo apt-get install build-essential
 
-2. **[nlohmann/json](https://github.com/nlohmann/json)**:
-   - A C++ JSON library for parsing API responses.
-   - **Installation**:
-       - Linux: 
-```bash
-sudo apt install nlohmann-json3-dev
-```
-       
+# CentOS/RHEL
+sudo yum groupinstall "Development Tools"
 
-3. **[websocketpp](https://github.com/zaphoyd/websocketpp)**:
-   - A C++ WebSocket library for real-time communication.
-   - **Installation**:
-     - Linux(Ubuntu):
-```bash
-sudo apt update
-sudo apt install libwebsocketpp-dev
-```
-   - ***Verify Installation***:
-        - Check that the WebSocket++ header files are installed at 
-            `/usr/include/websocketpp`
-
-4. **[Boost](https://www.boost.org/)**:
-   - Required by `websocketpp` for ASIO and SSL.
-   - **Installation**:
-     - Linux: 
-```bash
-sudo apt install libboost-all-dev
+# macOS (using Homebrew)
+xcode-select --install
 ```
 
-5. **CMake**:
-   - Build system generator.
-   - **Installation**:
-     - Linux: 
+### 2. CMake (3.15+)
+Required for building the project.
+
 ```bash
-sudo apt install cmake
+# Ubuntu/Debian
+sudo apt-get install cmake
+
+# CentOS/RHEL
+sudo yum install cmake3
+
+# macOS
+brew install cmake
+
+# Windows
+# Download installer from https://cmake.org/download/
 ```
 
-6. **[OpenSSL](https://www.openssl.org/)**:
-   - Provides TLS/SSL support for secure WebSocket connections.
-   - **Installation**:
-     - Linux: 
+## Required Libraries
+
+### 1. libcurl (7.68.0+)
+HTTP/HTTPS client library for API requests.
+
 ```bash
-sudo apt install libssl-dev
+# Ubuntu/Debian
+sudo apt-get install libcurl4-openssl-dev
+
+# CentOS/RHEL
+sudo yum install libcurl-devel
+
+# macOS
+brew install curl
+
+# Windows
+# Included in the project as a vcpkg dependency
 ```
 
+### 2. OpenSSL (1.1.1+)
+Required for WebSocket secure connections.
 
-## Installation Instructions
-
-### Step 1: Clone the Repository
 ```bash
-git clone https://github.com/Beeram12/TradingManagement.git
-cd TradingManagement
-```
-### Step 2: Install Dependencies
-   - Make sure all dependencies listed above are installed
+# Ubuntu/Debian
+sudo apt-get install libssl-dev
 
-### Step 3: Build the Project
-Use CMake to configure and build the project:
+# CentOS/RHEL
+sudo yum install openssl-devel
+
+# macOS
+brew install openssl@1.1
+
+# Windows
+# Included in the project as a vcpkg dependency
+```
+
+### 3. Boost (1.71.0+)
+Required for WebSocket implementation.
+
+```bash
+# Ubuntu/Debian
+sudo apt-get install libboost-all-dev
+
+# CentOS/RHEL
+sudo yum install boost-devel
+
+# macOS
+brew install boost
+
+# Windows
+# Download from https://www.boost.org/users/download/
+```
+
+### 4. nlohmann/json (3.9.0+)
+Modern JSON library for C++.
+
+```bash
+# Ubuntu/Debian
+sudo apt-get install nlohmann-json3-dev
+
+# CentOS/RHEL
+# Build from source:
+git clone https://github.com/nlohmann/json.git
+cd json
+mkdir build && cd build
+cmake ..
+make -j4
+sudo make install
+
+# macOS
+brew install nlohmann-json
+
+# Windows
+# Included in the project as a vcpkg dependency
+```
+
+### 5. WebSocket++ (0.8.2+)
+Header-only WebSocket library.
+
+```bash
+# Ubuntu/Debian
+sudo apt-get install libwebsocketpp-dev
+
+# CentOS/RHEL
+# Build from source:
+git clone https://github.com/zaphoyd/websocketpp.git
+cd websocketpp
+mkdir build && cd build
+cmake ..
+sudo make install
+
+# macOS
+brew install websocketpp
+
+# Windows
+# Included in the project as a vcpkg dependency
+```
+
+## Build Tools
+
+### vcpkg (Windows Only)
+Package manager for C++ libraries on Windows:
+
+1. Clone vcpkg:
+```batch
+git clone https://github.com/Microsoft/vcpkg.git
+cd vcpkg
+.\bootstrap-vcpkg.bat
+```
+
+2. Install required packages:
+```batch
+vcpkg install curl:x64-windows
+vcpkg install openssl:x64-windows
+vcpkg install boost:x64-windows
+vcpkg install nlohmann-json:x64-windows
+vcpkg install websocketpp:x64-windows
+```
+
+## Build Instructions
+
+1. Open the main project directory:
+
+2. Create build directory (if it does not exist):
 ```bash
 mkdir build
 cd build
+```
+
+3. Configure with CMake:
+```bash
+# Linux/macOS
 cmake ..
-make
+
+# Windows with vcpkg
+cmake -DCMAKE_TOOLCHAIN_FILE=[path to vcpkg]/scripts/buildsystems/vcpkg.cmake ..
 ```
 
-## Usage 
-
-1. **Running the Client**
+4. Build the project:
 ```bash
-./TradingClient
-```
-## Features
-
-- **Authenticate**: Logs in using your client ID and secret.
-- **Subscribe to Market Data**: Receives live updates on specified instruments.
-- **Place Orders**: Sends orders to the exchange.
-- **Cancel Orders**: Cancels the orders accordingly.
-- **Modifies Orders**:Modifies the order details as per requirement
-- **Get OrderBook**:Able to retrieve orderbook for required instrument
-- **View Positions**:Able to view positions of placed order
-
-## Directory Structure
-```bash
-.
-├── build/                  # Build directory (ignored in .gitignore)
-├── CMakeLists.txt          # CMake configuration
-├── README.md               # Project documentation
-├── src/
-│   └── main.cpp            # Main source file
+cmake --build . --config Release
 ```
 
-## **Benchmarking Results**
+## Verification
 
-This section summarizes the performance metrics collected during testing for different aspects of the system, including **order placement latency**, **market data processing latency**, **WebSocket message propagation delay**, and **end-to-end trading loop latency**.
+After installation, verify the setup:
+1. All required libraries are properly linked
+2. OpenSSL version is correct
+3. Network connectivity is available
+4. Compiler supports C++17 features
 
+## Troubleshooting
 
+Common issues and solutions:
 
-### **1. Order Placement Latency**
-Measures the time taken to send an order to the server and receive a response.
+1. OpenSSL version mismatch:
+   - Ensure system OpenSSL matches the required version
+   - Check library paths are correctly set
 
-| **Instrument Name**      | **Price** | **Amount** | **Time (ms)** |
-|---------------------------|-----------|------------|---------------|
-| ETH-PERPETUAL            | 20        | 20         | 911.488       |
-| ADA_USDC-PERPETUAL       | 1.04      | 0.2        | 1178.85       |
-| BTC_EURR                 | 20        | 20         | 992.463       |
+2. Boost not found:
+   - Verify Boost installation path
+   - Check environment variables
 
+3. WebSocket++ compilation errors:
+   - Ensure all Boost dependencies are installed
+   - Verify compiler C++17 support
 
+4. CURL SSL certificate issues:
+   - Update CA certificates
+   - Check SSL certificate paths
 
+## Support
 
-
-### **2. Market Data Processing Latency**
-Time taken from receiving market data updates via WebSocket to processing and updating the internal state.
-
-| **Instrument Name**      | **Time (µs)** |
-|---------------------------|---------------|
-| ETH-PERPETUAL            | 360           |
-| BTC-PERPETUAL            | 591           |
-| DOGE_USDC-PERPETUAL      | 573           |
-
-
-### **3. WebSocket Message Propagation Delay**
-Measures the time taken for a WebSocket message to travel from the server to the client.
-
-| **Instrument Name**      | **Time (µs)** |
-|---------------------------|---------------|
-| ETH-PERPETUAL            | 0             |
-| BTC-PERPETUAL            | 0             |
-| DOGE_USDC-PERPETUAL      | 0             |
-
-
-### **4. End-to-End Trading Loop Latency**
-Measures the time taken for a complete cycle: from placing an order to receiving a server response.
-
-| **Instrument Name**      | **Price** | **Amount** | **Time (ms)** |
-|---------------------------|-----------|------------|---------------|
-| ETH-PERPETUAL            | 20        | 20         | 847           |
-| ADA_USDC-PERPETUAL       | 1.04      | 0.2        | 1216          |
-| BTC_EURR                 | 20        | 20         | 873           |
-
-
-
-## **Key Takeaways**
-1. **Order Placement Latency**: Average latency for placing orders was approximately 1027.60 ms.
-2. **Market Data Processing Latency**: Market data updates were processed in an average of ~508 µs.
-3. **WebSocket Propagation Delay**: Negligible due to local testing.
-4. **End-to-End Trading Loop Latency**: Average cycle latency was measured at 978.66 ms.
-
-
-
-
+For additional support:
+- Consult library-specific documentation
+- Contact system administrators for environment-specific issues
+- Report bugs and feature requests at this [email](mailto:nagariyaaarnav@gmail.com)
