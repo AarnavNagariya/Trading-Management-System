@@ -31,7 +31,7 @@ include_directories(${WEBSOCKETPP_INCLUDE_DIR})
 
 # Source files
 set(SOURCES
-    src/main_optimized_more.cpp
+    src/main.cpp
 )
 
 # Add the executable

@@ -1,6 +1,9 @@
 #include <iostream>
 #include <string>
 #include <unordered_set>
+#include <deque>
+#include <queue>
+#include <array>
 #include <curl/curl.h>
 #include <nlohmann/json.hpp>
 #include <websocketpp/config/asio_client.hpp>
@@ -8,6 +11,10 @@
 #include <websocketpp/common/thread.hpp>
 #include <thread>
 #include <chrono>
+#include <mutex>
+#include <condition_variable>
+#include <immintrin.h>
+#include <atomic>
 
 
 #define CLIENT_ID "lCQBtKlm"
@@ -23,91 +30,481 @@ size_t WriteCallback(void *contents, size_t size, size_t nmemb, void *userp)
     return size * nmemb;
 }
 
-class TradingClient
-{
+// Network optimization components
+class ConnectionPool {
+private:
+    std::vector<CURL*> connections;
+    std::mutex pool_mutex;
+    size_t max_connections;
+
+public:
+    ConnectionPool(size_t max_size = 10) : max_connections(max_size) {
+        for(size_t i = 0; i < max_size; ++i) {
+            CURL* curl = curl_easy_init();
+            if(curl) {
+                setupCurlOptions(curl);
+                connections.push_back(curl);
+            }
+        }
+    }
+
+    ~ConnectionPool() {
+        for(auto curl : connections) {
+            curl_easy_cleanup(curl);
+        }
+    }
+
+    void setupCurlOptions(CURL* curl) {
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
+        curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
+        curl_easy_setopt(curl, CURLOPT_TCP_KEEPIDLE, 120L);
+        curl_easy_setopt(curl, CURLOPT_TCP_KEEPINTVL, 60L);
+        curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "gzip, deflate");
+        curl_easy_setopt(curl, CURLOPT_HTTP_CONTENT_DECODING, 1L);
+        curl_easy_setopt(curl, CURLOPT_ENCODING, "gzip, deflate");
+    }
+
+    CURL* acquire() {
+        std::lock_guard<std::mutex> lock(pool_mutex);
+        if(connections.empty()) return nullptr;
+        
+        CURL* conn = connections.back();
+        connections.pop_back();
+        return conn;
+    }
+
+    void release(CURL* conn) {
+        std::lock_guard<std::mutex> lock(pool_mutex);
+        if(connections.size() < max_connections) {
+            connections.push_back(conn);
+        } else {
+            curl_easy_cleanup(conn);
+        }
+    }
+};
+
+class OrderBook {
+private:
+    std::map<double, double> bids;  // price -> volume
+    std::map<double, double> asks;  // price -> volume
+
+public:
+    void update(const json& data) {
+        if (data.contains("type") && data["type"] == "change") {
+            // Process bids
+            if (data.contains("bids")) {
+                for (const auto& bid : data["bids"]) {
+                    if (bid.is_array() && bid.size() >= 3) {
+                        const auto& action = bid[0];
+                        if (action == "delete") {
+                            if (bid[1].is_number()) {
+                                double price = bid[1].get<double>();
+                                bids.erase(price);
+                            }
+                        } else {
+                            // New or update
+                            if (bid[1].is_number() && bid[2].is_number()) {
+                                double price = bid[1].get<double>();
+                                double volume = bid[2].get<double>();
+                                if (volume > 0) {
+                                    bids[price] = volume;
+                                } else {
+                                    bids.erase(price);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Process asks
+            if (data.contains("asks")) {
+                for (const auto& ask : data["asks"]) {
+                    if (ask.is_array() && ask.size() >= 3) {
+                        const auto& action = ask[0];
+                        if (action == "delete") {
+                            if (ask[1].is_number()) {
+                                double price = ask[1].get<double>();
+                                asks.erase(price);
+                            }
+                        } else {
+                            // New or update
+                            if (ask[1].is_number() && ask[2].is_number()) {
+                                double price = ask[1].get<double>();
+                                double volume = ask[2].get<double>();
+                                if (volume > 0) {
+                                    asks[price] = volume;
+                                } else {
+                                    asks.erase(price);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (data.contains("type") && data["type"] == "snapshot") {
+            // Handle initial snapshot
+            bids.clear();
+            asks.clear();
+
+            if (data.contains("bids")) {
+                for (const auto& bid : data["bids"]) {
+                    if (bid.is_array() && bid.size() >= 2 && 
+                        bid[0].is_number() && bid[1].is_number()) {
+                        double price = bid[0].get<double>();
+                        double volume = bid[1].get<double>();
+                        if (volume > 0) {
+                            bids[price] = volume;
+                        }
+                    }
+                }
+            }
+
+            if (data.contains("asks")) {
+                for (const auto& ask : data["asks"]) {
+                    if (ask.is_array() && ask.size() >= 2 &&
+                        ask[0].is_number() && ask[1].is_number()) {
+                        double price = ask[0].get<double>();
+                        double volume = ask[1].get<double>();
+                        if (volume > 0) {
+                            asks[price] = volume;
+                        }
+                    }
+                }
+            }
+        }
+
+        // Print current state
+        std::cout << "Current Order Book State:" << std::endl;
+        std::cout << "Top Bids:" << std::endl;
+        int count = 0;
+        for (auto it = bids.rbegin(); it != bids.rend() && count < 5; ++it, ++count) {
+            std::cout << "Price: " << it->first << ", Volume: " << it->second << std::endl;
+        }
+
+        std::cout << "\nTop Asks:" << std::endl;
+        count = 0;
+        for (auto it = asks.begin(); it != asks.end() && count < 5; ++it, ++count) {
+            std::cout << "Price: " << it->first << ", Volume: " << it->second << std::endl;
+        }
+    }
+
+    // Getter methods for SIMD processing if needed
+    std::vector<double> getBidPrices() const {
+        std::vector<double> prices;
+        prices.reserve(bids.size());
+        for (const auto& bid : bids) {
+            prices.push_back(bid.first);
+        }
+        return prices;
+    }
+
+    std::vector<double> getBidVolumes() const {
+        std::vector<double> volumes;
+        volumes.reserve(bids.size());
+        for (const auto& bid : bids) {
+            volumes.push_back(bid.second);
+        }
+        return volumes;
+    }
+
+    std::vector<double> getAskPrices() const {
+        std::vector<double> prices;
+        prices.reserve(asks.size());
+        for (const auto& ask : asks) {
+            prices.push_back(ask.first);
+        }
+        return prices;
+    }
+
+    std::vector<double> getAskVolumes() const {
+        std::vector<double> volumes;
+        volumes.reserve(asks.size());
+        for (const auto& ask : asks) {
+            volumes.push_back(ask.second);
+        }
+        return volumes;
+    }
+
+};
+// Rate Limiter
+class RateLimiter {
+private:
+    std::deque<std::chrono::steady_clock::time_point> request_times;
+    std::mutex mutex;
+    const size_t max_requests;
+    const std::chrono::seconds window;
+
+public:
+    RateLimiter(size_t max_req = 100, std::chrono::seconds win = std::chrono::seconds(1))
+        : max_requests(max_req), window(win) {}
+
+    bool shouldThrottle() {
+        std::lock_guard<std::mutex> lock(mutex);
+        auto now = std::chrono::steady_clock::now();
+        
+        while(!request_times.empty() && now - request_times.front() > window) {
+            request_times.pop_front();
+        }
+        
+        if(request_times.size() >= max_requests) {
+            return true;
+        }
+        
+        request_times.push_back(now);
+        return false;
+    }
+};
+
+// Circuit Breaker
+class CircuitBreaker {
+private:
+    std::atomic<int> failure_count{0};
+    std::atomic<bool> is_open{false};
+    std::chrono::steady_clock::time_point last_failure_time;
+    static constexpr int FAILURE_THRESHOLD = 5;
+    static constexpr auto RESET_TIMEOUT = std::chrono::seconds(30);
+
+public:
+    template<typename Func>
+    auto execute(Func operation) -> decltype(operation()) {
+        if(is_open.load()) {
+            auto now = std::chrono::steady_clock::now();
+            if(now - last_failure_time < RESET_TIMEOUT) {
+                throw std::runtime_error("Circuit breaker is open");
+            }
+            is_open.store(false);
+        }
+        
+        try {
+            auto result = operation();
+            failure_count.store(0);
+            return result;
+        } catch(const std::exception& e) {
+            last_failure_time = std::chrono::steady_clock::now();
+            if(++failure_count >= FAILURE_THRESHOLD) {
+                is_open.store(true);
+            }
+            throw;
+        }
+    }
+};
+
+// Optimized Trading Client
+class TradingManager {
 private:
     std::string clientId;
     std::string clientSecretId;
     std::string accessToken;
     const std::string baseUrl = "https://test.deribit.com/api/v2/";
     const std::string wsUrl = "wss://test.deribit.com/ws/api/v2/";
-    client wsClient;
+    std::unique_ptr<client> wsClient = std::make_unique<client>(); // 1. Unique Pointer Added
     websocketpp::connection_hdl hdl;
-    std::thread wsThread;
-    bool isConnected = false;
+    std::unique_ptr<std::thread> wsThread = std::make_unique<std::thread>(); // 1. Unique Pointer Added
+
+    std::atomic<bool> isConnected{false}; // 2. Atomic Added
+    std::atomic<bool> shouldStop{false}; // 2. Atomic Added
     std::unordered_set<std::string> subscribed_instruments;
-    static int update_counter;
+    static std::atomic<int> update_counter; // 2. Atomic Added
+    
+    
+    std::unique_ptr<ConnectionPool> connPool;
+    std::unique_ptr<RateLimiter> rateLimiter;
+    std::unique_ptr<CircuitBreaker> circuitBreaker;
+    OrderBook orderBook;
+    
+    
+    // Thread Pool
+    class ThreadPool {
+        std::vector<std::thread> workers;
+        std::queue<std::function<void()>> tasks;
+        std::mutex queue_mutex;
+        std::condition_variable condition;
+        bool stop;
 
-    // Function to send a cURL request
-    std::string sendRequest(const std::string &endpoint, const json &payload, const std::string &token = "")
-    {
-        std::string readBuffer;
-        CURL *curl;
-        CURLcode res;
-
-        curl_global_init(CURL_GLOBAL_DEFAULT);
-        curl = curl_easy_init();
-
-        if (curl)
-        {
-            std::string url = baseUrl + endpoint; // Combine base URL and endpoint
-            curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-            curl_easy_setopt(curl, CURLOPT_POST, 1L);
-
-            std::string jsonStr = payload.dump();
-            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonStr.c_str());
-
-            struct curl_slist *headers = NULL;
-            headers = curl_slist_append(headers, "Content-Type: application/json");
-            if (!token.empty())
-            {
-                headers = curl_slist_append(headers, ("Authorization: Bearer " + token).c_str());
+    public:
+        ThreadPool(size_t threads) : stop(false) {
+            for(size_t i = 0; i < threads; ++i) {
+                workers.emplace_back([this] {
+                    while(true) {
+                        std::function<void()> task;
+                        {
+                            std::unique_lock<std::mutex> lock(queue_mutex);
+                            condition.wait(lock, [this] { 
+                                return stop || !tasks.empty(); 
+                            });
+                            if(stop && tasks.empty()) return;
+                            task = std::move(tasks.front());
+                            tasks.pop();
+                        }
+                        task();
+                    }
+                });
             }
-            curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
-            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
-
-            res = curl_easy_perform(curl);
-            if (res != CURLE_OK)
-            {
-                std::cerr << "cURL Error: " << curl_easy_strerror(res) << std::endl;
-            }
-
-            curl_slist_free_all(headers);
-            curl_easy_cleanup(curl);
         }
 
-        curl_global_cleanup();
-        return readBuffer;
+        template<class F>
+        void enqueue(F&& f) {
+            {
+                std::unique_lock<std::mutex> lock(queue_mutex);
+                tasks.emplace(std::forward<F>(f));
+            }
+            condition.notify_one();
+        }
+
+        ~ThreadPool() {
+            {
+                std::unique_lock<std::mutex> lock(queue_mutex);
+                stop = true;
+            }
+            condition.notify_all();
+            for(std::thread &worker: workers) {
+                worker.join();
+            }
+        }
+    };
+
+    ThreadPool threadPool;
+
+    // Optimized request sending
+    std::string sendRequest(const std::string &endpoint, const json &payload, const std::string &token = "") {
+        if(rateLimiter->shouldThrottle()) {
+            throw std::runtime_error("Rate limit exceeded");
+        }
+
+        return circuitBreaker->execute([&]() {
+            std::string readBuffer;
+            CURL* curl = connPool->acquire();
+            
+            if(!curl) {
+                throw std::runtime_error("No available connections");
+            }
+
+            CURLcode res;
+            struct curl_slist *headers = NULL;
+            
+            try {
+                std::string url = baseUrl + endpoint;
+                curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+                curl_easy_setopt(curl, CURLOPT_POST, 1L);
+
+                std::string jsonStr = payload.dump();
+                curl_easy_setopt(curl, CURLOPT_POSTFIELDS, jsonStr.c_str());
+
+                headers = curl_slist_append(headers, "Content-Type: application/json");
+                if (!token.empty()) {
+                    headers = curl_slist_append(headers, ("Authorization: Bearer " + token).c_str());
+                }
+                curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+                curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+                curl_easy_setopt(curl, CURLOPT_WRITEDATA, &readBuffer);
+
+                res = curl_easy_perform(curl);
+                
+                if (res != CURLE_OK) {
+                    throw std::runtime_error(std::string("CURL Error: ") + curl_easy_strerror(res));
+                }
+
+                curl_slist_free_all(headers);
+                connPool->release(curl);
+                
+                return readBuffer;
+            } catch (...) {
+                if(headers) curl_slist_free_all(headers);
+                connPool->release(curl);
+                throw;
+            }
+        });
     }
+
+    // Optimized WebSocket message handling
+    void on_message(websocketpp::connection_hdl hdl, client::message_ptr msg) {
+        static thread_local json parser;
+        static thread_local std::string buffer;
+        
+        auto start_time = std::chrono::high_resolution_clock::now();
+        
+        buffer = msg->get_payload();
+        try {
+            const auto& response = parser.parse(buffer);
+            if (response.contains("params")) {
+                threadPool.enqueue([this, response]() {
+                    processWebSocketMessage(response);
+                });
+            }
+        } catch (...) {
+            parser = json();
+            throw;
+        }
+
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+        std::cout << "Message processing latency: " << duration.count() << "µs" << std::endl;
+    }
+
+    void debugPrint(const json& j, const std::string& prefix = "") {
+    std::cout << prefix << j.dump(2) << std::endl;
+}
+
+// Replace processWebSocketMessage with this version:
+void processWebSocketMessage(const json& response) {
+    try {
+        update_counter++;
+        std::cout << "Update #" << update_counter << std::endl;
+        
+        if (response.contains("params") && response["params"].contains("data")) {
+            const auto& data = response["params"]["data"];
+            // Debug print
+            std::cout << "Received data structure:" << std::endl;
+            debugPrint(data);
+            processOrderBookData(data);
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "Error processing WebSocket message: " << e.what() << std::endl;
+    }
+}
+
+void processOrderBookData(const json& data) {
+    try {
+        orderBook.update(data);
+    } catch (const std::exception& e) {
+        std::cerr << "Error processing order book data: " << e.what() << std::endl;
+    }
+}
 
 public:
     const std::string &getAccessToken() const
     {
         return accessToken;
     }
-    // Constructor
-    TradingClient(const std::string &id, const std::string &secretId) : clientId(id), clientSecretId(secretId)
-    {
-        wsClient.clear_access_channels(websocketpp::log::alevel::all);
-        wsClient.clear_error_channels(websocketpp::log::elevel::all);
-        wsClient.init_asio();
-        wsClient.set_open_handler(std::bind(&TradingClient::on_open, this, std::placeholders::_1));
-        wsClient.set_message_handler(std::bind(&TradingClient::on_message, this, std::placeholders::_1, std::placeholders::_2));
-        wsClient.set_close_handler(std::bind(&TradingClient::on_close, this, std::placeholders::_1));
+    TradingManager(const std::string &id, const std::string &secretId)
+        : clientId(id), clientSecretId(secretId), 
+          threadPool(std::thread::hardware_concurrency()) {
+        
+        connPool = std::make_unique<ConnectionPool>(10);
+        rateLimiter = std::make_unique<RateLimiter>(100, std::chrono::seconds(1));
+        circuitBreaker = std::make_unique<CircuitBreaker>();
+
+       wsClient->clear_access_channels(websocketpp::log::alevel::all);
+        wsClient->clear_error_channels(websocketpp::log::elevel::all);
+        wsClient->init_asio();
+        wsClient->set_open_handler(std::bind(&TradingManager::on_open, this, std::placeholders::_1));
+        wsClient->set_message_handler(std::bind(&TradingManager::on_message, this, std::placeholders::_1, std::placeholders::_2));
+        wsClient->set_close_handler(std::bind(&TradingManager::on_close, this, std::placeholders::_1));
     }
     // Destructor
-    ~TradingClient()
+    ~TradingManager()
     {
-        if (wsThread.joinable())
+        if (wsThread->joinable())
         {
-            wsClient.stop();
-            wsThread.join();
+            wsClient->stop();
+            wsThread->join();
         }
 
         if (isConnected)
         {
-            wsClient.close(hdl, websocketpp::close::status::normal, "Closing connection");
+            wsClient->close(hdl, websocketpp::close::status::normal, "Closing connection");
         }
 
     }
@@ -118,47 +515,6 @@ public:
         isConnected = true;
         std::cout << "WebSocket connection established." << std::endl;
     }
-    // Output From websocket
-    void on_message(websocketpp::connection_hdl hdl, client::message_ptr msg)
-    {
-        auto start_time = std::chrono::high_resolution_clock::now();
-        std::string received_msg = msg->get_payload();
-        try
-        {
-            json response = json::parse(received_msg);
-            if (response.contains("params"))
-            {
-                update_counter++;
-                std::cout << "Update #" << update_counter << std::endl;
-                auto params = response["params"];
-                if (params.contains("data"))
-                {
-                    auto data = params["data"];
-                    static json previous_data;
-                    if (data != previous_data)
-                    {
-                        std::cout << "Data updated: " << data.dump(4) << std::endl;
-                        previous_data = data;
-                    }
-                    else
-                    {
-                        std::cout << "No new updates." << std::endl;
-                    }
-                }
-                else if (params.contains("error"))
-                {
-                    std::cout << "Error: " << params["error"].dump(4) << std::endl;
-                }
-            }
-        }
-        catch (const std::exception &e)
-        {
-            std::cerr << "Error parsing WebSocket message: " << e.what() << std::endl;
-        }
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-        std::cout << "Websocket message processing Latency: " << duration.count() << "µs" << std::endl;
-    }
 
     void on_close(websocketpp::connection_hdl hdl)
     {
@@ -166,40 +522,66 @@ public:
         std::cout << "WebSocket connection closed." << std::endl;
     }
     // Function to connect websocket
-    void connectWebSocket()
+    void connectWebSocket() 
     {
-        websocketpp::lib::error_code ec;
-        wsClient.set_tls_init_handler([](websocketpp::connection_hdl hdl) -> websocketpp::lib::shared_ptr<boost::asio::ssl::context>
-                                      {
-    websocketpp::lib::shared_ptr<boost::asio::ssl::context> ctx = 
-        websocketpp::lib::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12_client);
-    try {
-        ctx->set_verify_mode(boost::asio::ssl::context::verify_none);
-        // Load certificates if needed
-        // ctx->load_verify_file("path_to_certificate.pem");
-    } catch (const std::exception &e) {
-        std::cerr << "Error initializing SSL context: " << e.what() << std::endl;
-    }
-    return ctx; });
+        // Clean up the previous connection if any
+        if (wsThread && wsThread->joinable()) {
+            wsClient->stop();  // Stop the previous WebSocket client before reusing it
+            wsThread->join();  // Join the previous thread
+            std::cout << "Previous connection stopped and thread joined." << std::endl;
+        }
 
-        client::connection_ptr con = wsClient.get_connection(wsUrl, ec);
-        if (ec)
-        {
+        // Reinitialize wsClient to ensure it starts fresh for each connection attempt
+        wsClient = std::make_unique<client>();  // Reset the WebSocket client object
+
+        // Clear and reset all WebSocket settings
+        wsClient->clear_access_channels(websocketpp::log::alevel::all);
+        wsClient->clear_error_channels(websocketpp::log::elevel::all);
+        wsClient->init_asio();
+        wsClient->set_open_handler(std::bind(&TradingManager::on_open, this, std::placeholders::_1));
+        wsClient->set_message_handler(std::bind(&TradingManager::on_message, this, std::placeholders::_1, std::placeholders::_2));
+        wsClient->set_close_handler(std::bind(&TradingManager::on_close, this, std::placeholders::_1));
+
+        websocketpp::lib::error_code ec;
+
+        // Set TLS initialization handler
+        wsClient->set_tls_init_handler([](websocketpp::connection_hdl hdl) -> websocketpp::lib::shared_ptr<boost::asio::ssl::context> {
+            websocketpp::lib::shared_ptr<boost::asio::ssl::context> ctx = 
+                websocketpp::lib::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::tlsv12_client);
+            try {
+                ctx->set_verify_mode(boost::asio::ssl::context::verify_none);
+            } catch (const std::exception &e) {
+                std::cerr << "Error initializing SSL context: " << e.what() << std::endl;
+            }
+            return ctx;
+        });
+
+        // Create connection and check for errors
+        client::connection_ptr con = wsClient->get_connection(wsUrl, ec);
+        if (ec) {
             std::cerr << "WebSocket connection error: " << ec.message() << std::endl;
             return;
         }
 
-        wsClient.connect(con);
-        wsThread = std::thread([&]()
-                               { wsClient.run(); });
+        // Connect and start WebSocket client in a new thread
+        wsClient->connect(con);
+        wsThread = std::make_unique<std::thread>([this]() {
+            try {
+                std::cout << "WebSocket client running in a new thread." << std::endl;
+                wsClient->run();
+            } catch (const std::exception &e) {
+                std::cerr << "Error in WebSocket thread: " << e.what() << std::endl;
+            }
+        });
     }
+
 
     // Function to send message through websocket
     void sendWebSocketMessage(const std::string &message)
     {
         if (isConnected)
         {
-            wsClient.send(hdl, message, websocketpp::frame::opcode::text);
+            wsClient->send(hdl, message, websocketpp::frame::opcode::text);
         }
         else
         {
@@ -221,7 +603,7 @@ public:
                     {
             std::this_thread::sleep_for(std::chrono::seconds(duration_seconds));
             std::cout << "closing WebSocket connection after " << duration_seconds << " seconds." << std::endl;
-            wsClient.close(hdl, 1000, "Closing after timeout"); })
+            wsClient->close(hdl, 1000, "Closing after timeout"); })
             .detach();
     }
     // Function to show subscription
@@ -536,7 +918,8 @@ public:
 
     }
 };
-int TradingClient::update_counter = 0;
+std::atomic<int> TradingManager::update_counter = 0;
+
 
 int main()
 {
@@ -552,7 +935,7 @@ int main()
     clientSecret = CLIENT_SECRET;
 
     // Creating client object
-    TradingClient client(clientId, clientSecret);
+    TradingManager client(clientId, clientSecret);
 
     // Authenticating
     client.authenticate();
@@ -709,6 +1092,7 @@ int main()
                 std::cin.clear();
                 std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
             }
+            
             break;
         }
         case 8:
