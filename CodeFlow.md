@@ -1,3 +1,14 @@
+### Components of the Trading System
+
+1.  **ConnectionPool:** Manages a pool of CURL connections to optimize network requests.
+2.  **OrderBook:** Processes and maintains the order book data.
+3.  **RateLimiter:** Implements a rate-limiting mechanism to prevent excessive requests.
+4.  **CircuitBreaker:** Provides a circuit breaker pattern to handle failures and prevent cascading issues.
+5.  **TradingManager:** The main class that handles the trading logic, including WebSocket communication, order management, and position retrieval.
+6.  **TradingManager::ThreadPool:** A thread pool used to handle asynchronous processing of WebSocket messages.
+
+
+
 ### ConnectionPool
 
 *   **AcquireConnection:** Acquires a connection from the pool by locking the mutex, checking if connections are available, popping a connection from the pool, and releasing the mutex. If no connections are available, it returns a `nullptr`.
