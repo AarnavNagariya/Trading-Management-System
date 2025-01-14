@@ -126,7 +126,7 @@ int extractOrderLatencyFromOutput(const std::string& output) {
 
 
 // Place an order and log the latency to a CSV file.
-void placeOrderAndLogLatency(std::ofstream& outputFile) {
+void putOrderAndLogLatency(std::ofstream& outputFile) {
     // Input arguments: outputFile (std::ofstream&) - Output file stream to write the data.
 
     std::string instrument = getRandomText();
@@ -167,7 +167,7 @@ void Calculate_Order_Latency(int n = 100, int delay = 100,std::string filename =
     const int NUM_ITERATIONS = n;
     
     for (int i = 0; i < NUM_ITERATIONS; ++i) {
-        placeOrderAndLogLatency(orderFile);
+        putOrderAndLogLatency(orderFile);
         
         std::this_thread::sleep_for(std::chrono::milliseconds(delay)); // Delay to wait and gaurantee the order is placed
     }
@@ -303,7 +303,7 @@ void modifyOrderAndLogLatency(const std::string& orderID, std::ofstream& outputF
     int newAmount = NEW_AMOUNT;
 
     std::stringstream cmd;
-    cmd << "(echo 4 && echo " << orderID 
+    cmd << "(echo 3 && echo " << orderID 
         << " && echo " << newPrice 
         << " && echo " << newAmount 
         << " && echo 9) | ./TradingClient";
@@ -392,11 +392,11 @@ int extractCancellationLatencyFromOutput(const std::string& output) {
 }
 
 // Function to cancel an order and log the latency
-void cancelOrderAndLogLatency(const std::string& orderID, std::ofstream& outputFile) {
+void removeOrderAndLogLatency(const std::string& orderID, std::ofstream& outputFile) {
     // Input arguments: orderID (const std::string&) - Order ID to cancel, outputFile (std::ofstream&) - Output file stream to write the data.
 
     std::stringstream cmd;
-    cmd << "(echo 5 && echo " << orderID 
+    cmd << "(echo 4 && echo " << orderID 
         << " && echo 9) | ./TradingClient";
 
     try {
@@ -441,7 +441,7 @@ void Calculate_Cancellation_Latency(int delay = 100,std::string filename = "orde
         std::cout << "Found " << orderIDs.size() << " orders to cancel" << std::endl;
 
         for (const auto& orderID : orderIDs) {
-            cancelOrderAndLogLatency(orderID, cancellationFile);
+            removeOrderAndLogLatency(orderID, cancellationFile);
 
             std::this_thread::sleep_for(std::chrono::milliseconds(delay)); // Small delay between cancellations
         }
@@ -488,7 +488,7 @@ void getOrderbookAndLogLatency(std::ofstream& outputFile) {
     int depth = getRandomInRange(1, 5);
 
     std::stringstream cmd;
-    cmd << "(echo 3 && echo " << instrument 
+    cmd << "(echo 5 && echo " << instrument 
         << " && echo " << depth 
         << " && echo 9) | ./TradingClient";
 

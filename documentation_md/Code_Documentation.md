@@ -27,7 +27,7 @@
      - [Constructors and Destructors](#constructors-and-destructors)
      - [Class Overview](#class-overview)
      - [Core Methods](#core-methods)
-       - [`sendRequest`](#sendrequest) 
+       - [`send_request`](#send_request) 
        - [`on_message`](#on_message)
        - [`processWebSocketMessage`](#processwebsocketmessage)
        - [`processOrderBookData`](#processorderbookdata)
@@ -38,12 +38,12 @@
        - [Authentication](#authentication)
      - [Core Features](#core-features)
    - [TradingManager: Wrapper Functions](#tradingmanager-wrapper-functions)
-     - [`placeOrder`](#placeorder)
-     - [`getAllOpenOrders`](#getallopenorders)
-     - [`cancelOrder`](#cancelorder)
+     - [`putOrder`](#putOrder)
+     - [`allOpenOrders`](#allOpenOrders)
+     - [`removeOrder`](#removeOrder)
      - [`modifyOrder`](#modifyorder)
      - [`getOrderBook`](#getorderbook)
-     - [`getPositions`](#getpositions)
+     - [`fetchPositions`](#fetchPositions)
 
 ## Optimization Classes
 
@@ -234,7 +234,7 @@ The **TradingManager** class is a high-level component designed for managing tra
 
 ### **Core Methods**
 
-#### `sendRequest`
+#### `send_request`
 - Sends a REST API request to the specified endpoint.
 - **Parameters**:
   - `endpoint`: API endpoint relative to `baseUrl`.
@@ -302,7 +302,7 @@ The **TradingManager** class is a high-level component designed for managing tra
      - Ensures the WebSocket is connected before sending.
      - Logs an error if the WebSocket is not connected.
 
-3. `on_open`:
+3. `ws_onOpen`:
    - **Purpose**: Handler triggered when the WebSocket connection is established.
    - **Parameters**:
      - `hdl`: WebSocket connection handle.
@@ -310,7 +310,7 @@ The **TradingManager** class is a high-level component designed for managing tra
      - Sets the connection handle (`hdl`).
      - Marks the WebSocket as connected.
 
-4. `on_close`:
+4. `ws_onClose`:
    - **Purpose**: Handler triggered when the WebSocket connection is closed.
    - **Parameters**:
      - `hdl`: WebSocket connection handle.
@@ -321,7 +321,7 @@ The **TradingManager** class is a high-level component designed for managing tra
 
 #### **Subscription Management**
 
-1. `subscribeToOrderBook`:
+1. `subOrderBook`:
    - **Purpose**: Subscribes to an order book for a specified instrument.
    - **Parameters**:
      - `instrument`: The instrument to subscribe to.
@@ -369,7 +369,7 @@ This trading client is designed for robust, high-performance interaction with th
 
 ## TradingManager : Wrapper Functions
 
-### `placeOrder`
+### `putOrder`
 
 #### Description:
 Places a limit order for a specified instrument with a given price and amount.
@@ -382,7 +382,7 @@ Places a limit order for a specified instrument with a given price and amount.
 
 #### Behavior:
 - Constructs a JSON payload for the order request.
-- Sends the request using `sendRequest` and measures latency.
+- Sends the request using `send_request` and measures latency.
 - Parses the response to check for errors or success.
 
 #### Output:
@@ -390,7 +390,7 @@ Places a limit order for a specified instrument with a given price and amount.
 
 ---
 
-### `getAllOpenOrders`
+### `allOpenOrders`
 
 #### Description:
 Retrieves a list of all open orders.
@@ -411,7 +411,7 @@ None.
 
 ---
 
-### `cancelOrder`
+### `removeOrder`
 
 #### Description:
 Cancels an order using its ID.
@@ -470,7 +470,7 @@ Fetches the order book for a specific instrument up to a specified depth.
 
 ---
 
-### `getPositions`
+### `fetchPositions`
 
 #### Description:
 Retrieves the positions for a specified currency and kind.

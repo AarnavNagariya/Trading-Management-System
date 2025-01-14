@@ -368,7 +368,7 @@ private:
     ThreadPool threadPool;
 
     // Optimized request sending
-    std::string sendRequest(const std::string &endpoint, const json &payload, const std::string &token = "") {
+    std::string send_request(const std::string &endpoint, const json &payload, const std::string &token = "") {
         if(rateLimiter->shouldThrottle()) {
             throw std::runtime_error("Rate limit exceeded");
         }
@@ -419,7 +419,7 @@ private:
     }
 
     // Optimized WebSocket message handling
-    void on_message(websocketpp::connection_hdl hdl, client::message_ptr msg) {
+    void ws_message(websocketpp::connection_hdl hdl, client::message_ptr msg) {
         static thread_local json parser;
         static thread_local std::string buffer;
         
@@ -489,9 +489,9 @@ public:
        wsClient->clear_access_channels(websocketpp::log::alevel::all);
         wsClient->clear_error_channels(websocketpp::log::elevel::all);
         wsClient->init_asio();
-        wsClient->set_open_handler(std::bind(&TradingManager::on_open, this, std::placeholders::_1));
-        wsClient->set_message_handler(std::bind(&TradingManager::on_message, this, std::placeholders::_1, std::placeholders::_2));
-        wsClient->set_close_handler(std::bind(&TradingManager::on_close, this, std::placeholders::_1));
+        wsClient->set_open_handler(std::bind(&TradingManager::ws_onOpen, this, std::placeholders::_1));
+        wsClient->set_message_handler(std::bind(&TradingManager::ws_message, this, std::placeholders::_1, std::placeholders::_2));
+        wsClient->set_close_handler(std::bind(&TradingManager::ws_onClose, this, std::placeholders::_1));
     }
     // Destructor
     ~TradingManager()
@@ -509,14 +509,14 @@ public:
 
     }
 
-    void on_open(websocketpp::connection_hdl hdl)
+    void ws_onOpen(websocketpp::connection_hdl hdl)
     {
         this->hdl = hdl;
         isConnected = true;
         std::cout << "WebSocket connection established." << std::endl;
     }
 
-    void on_close(websocketpp::connection_hdl hdl)
+    void ws_onClose(websocketpp::connection_hdl hdl)
     {
         isConnected = false;
         std::cout << "WebSocket connection closed." << std::endl;
@@ -538,9 +538,9 @@ public:
         wsClient->clear_access_channels(websocketpp::log::alevel::all);
         wsClient->clear_error_channels(websocketpp::log::elevel::all);
         wsClient->init_asio();
-        wsClient->set_open_handler(std::bind(&TradingManager::on_open, this, std::placeholders::_1));
-        wsClient->set_message_handler(std::bind(&TradingManager::on_message, this, std::placeholders::_1, std::placeholders::_2));
-        wsClient->set_close_handler(std::bind(&TradingManager::on_close, this, std::placeholders::_1));
+        wsClient->set_open_handler(std::bind(&TradingManager::ws_onOpen, this, std::placeholders::_1));
+        wsClient->set_message_handler(std::bind(&TradingManager::ws_message, this, std::placeholders::_1, std::placeholders::_2));
+        wsClient->set_close_handler(std::bind(&TradingManager::ws_onClose, this, std::placeholders::_1));
 
         websocketpp::lib::error_code ec;
 
@@ -589,7 +589,7 @@ public:
         }
     }
     // Function for Subscribing to orderBook
-    void subscribeToOrderBook(const std::string &instrument, int duration_seconds)
+    void subOrderBook(const std::string &instrument, int duration_seconds)
     {
         std::cout << "Subscribed to:" << instrument << std::endl;
         subscribed_instruments.insert(instrument);
@@ -624,7 +624,7 @@ public:
             {"params", {{"grant_type", "client_credentials"}, {"client_id", clientId}, {"client_secret", clientSecretId}}},
             {"jsonrpc", "2.0"}};
 
-        std::string res = sendRequest("public/auth", payload);
+        std::string res = send_request("public/auth", payload);
         auto responseJson = json::parse(res);
         if (responseJson.contains("result") && responseJson["result"].contains("access_token"))
         {
@@ -642,7 +642,7 @@ public:
     }
 
     // For placing order
-    void placeOrder(const std::string &instrument, const std::string &accessToken, double price, double amount)
+    void putOrder(const std::string &instrument, const std::string &accessToken, double price, double amount)
     {
         json payload = {
             {"jsonrpc", "2.0"},
@@ -656,7 +656,7 @@ public:
             {"id", 1}};
         
         auto start_time = std::chrono::high_resolution_clock::now();
-        std::string response = sendRequest("private/buy", payload, accessToken);
+        std::string response = send_request("private/buy", payload, accessToken);
         auto end_time = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
@@ -690,7 +690,7 @@ public:
         }
     }
     // Function to get all orders
-    void getAllOpenOrders()
+    void allOpenOrders()
     {
         json payload = {
             {"jsonrpc", "2.0"},
@@ -698,7 +698,7 @@ public:
             {"params", {}},
             {"id", 2}};
 
-        std::string res = sendRequest("private/get_open_orders", payload, accessToken);
+        std::string res = send_request("private/get_open_orders", payload, accessToken);
         try
         {
             auto responseJson = json::parse(res);
@@ -745,7 +745,7 @@ public:
         }
     }
     // Function to cancel order
-    void cancelOrder(const std::string &accesstoken, const std::string &orderId)
+    void removeOrder(const std::string &accesstoken, const std::string &orderId)
     {
         json payload = {
             {"jsonrpc", "2.0"},
@@ -754,7 +754,7 @@ public:
             {"id", 3}};
         
         auto start_time = std::chrono::high_resolution_clock::now();
-        std::string response = sendRequest("private/cancel", payload, accessToken);
+        std::string response = send_request("private/cancel", payload, accessToken);
         auto responseJson = json::parse(response);
         if (responseJson.contains("error"))
         {
@@ -779,7 +779,7 @@ public:
         
         auto start_time = std::chrono::high_resolution_clock::now();
 
-        std::string response = sendRequest("private/edit", payload, accessToken);
+        std::string response = send_request("private/edit", payload, accessToken);
         if (!response.empty())
         {
             try
@@ -822,7 +822,7 @@ public:
 
         auto start_time = std::chrono::high_resolution_clock::now();
 
-        std::string response = sendRequest("public/get_order_book", payload);
+        std::string response = send_request("public/get_order_book", payload);
         auto responseJson = json::parse(response);
 
         if (responseJson.contains("result"))
@@ -863,7 +863,7 @@ public:
         }
     }
     // Function to get position
-    void getPositions(const std::string &accessToken, const std::string &currency, const std::string &kind)
+    void fetchPositions(const std::string &accessToken, const std::string &currency, const std::string &kind)
     {
         json payload = {
             {"jsonrpc", "2.0"},
@@ -875,7 +875,7 @@ public:
             {"id", 6}};
         
         auto start_time = std::chrono::high_resolution_clock::now();
-        std::string response = sendRequest("private/get_positions", payload, accessToken);
+        std::string response = send_request("private/get_positions", payload, accessToken);
         auto end_time = std::chrono::high_resolution_clock::now();
 
         if (response.empty())
@@ -952,14 +952,18 @@ int main()
     while (true)
     {
         int choice;
+        
+        std::cout << "\n====================================\n";
+        std::cout << "       Trading Menu for Derebit       \n";
+        std::cout << "====================================\n";
         std::cout << "\nSelect an option:\n";
-        std::cout << "1. Place Order\n";
-        std::cout << "2. Get All Open Orders\n";
-        std::cout << "3. Get Order Book\n";
-        std::cout << "4. Modify Order\n";
-        std::cout << "5. Cancel Order\n";
-        std::cout << "6. Get Positions\n";
-        std::cout << "7. Subscribe to Orderbook\n";
+        std::cout << "1. Place an Order\n";
+        std::cout << "2. Get all Orders\n";
+        std::cout << "3. Modify Order\n";
+        std::cout << "4. Remove an Order\n";
+        std::cout << "5. Get Order Book\n";
+        std::cout << "6. Get Current Positions\n";
+        std::cout << "7. Subscribe to an Orderbook\n";
         std::cout << "8. Show all subscriptions\n";
         std::cout << "9. Exit\n";
         std::cout << "Enter your choice: ";
@@ -988,7 +992,7 @@ int main()
 
             if (!std::cin.fail())
             {
-                client.placeOrder(instrument, accessToken, price, amount);
+                client.putOrder(instrument, accessToken, price, amount);
             }
             else
             {
@@ -1000,32 +1004,9 @@ int main()
         }
         case 2:
             // Get All Open Orders
-            client.getAllOpenOrders();
+            client.allOpenOrders();
             break;
-
         case 3:
-        {
-            // Get Order Book
-            std::string instrument;
-            int depth;
-            std::cout << "Enter instrument name: ";
-            std::cin >> instrument;
-            std::cout << "Enter depth: ";
-            std::cin >> depth;
-
-            if (!std::cin.fail())
-            {
-                client.getOrderBook(instrument, depth);
-            }
-            else
-            {
-                std::cerr << "Invalid input for depth. Please try again.\n";
-                std::cin.clear();
-                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-            }
-            break;
-        }
-        case 4:
         {
             // Modify Order
             std::string orderId;
@@ -1049,15 +1030,39 @@ int main()
             }
             break;
         }
-        case 5:
+        case 4:
         {
             // Cancel Order
             std::string orderId;
             std::cout << "Enter order ID: ";
             std::cin >> orderId;
-            client.cancelOrder(accessToken, orderId);
+            client.removeOrder(accessToken, orderId);
             break;
         }
+        case 5:
+        {
+            // Get Order Book
+            std::string instrument;
+            int depth;
+            std::cout << "Enter instrument name: ";
+            std::cin >> instrument;
+            std::cout << "Enter depth: ";
+            std::cin >> depth;
+
+            if (!std::cin.fail())
+            {
+                client.getOrderBook(instrument, depth);
+            }
+            else
+            {
+                std::cerr << "Invalid input for depth. Please try again.\n";
+                std::cin.clear();
+                std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            }
+            break;
+        }
+        
+        
         case 6:
         {
             // Get Positions
@@ -1066,7 +1071,7 @@ int main()
             std::cin >> currency;
             std::cout << "Enter kind (e.g., future, option): ";
             std::cin >> kind;
-            client.getPositions(accessToken, currency, kind);
+            client.fetchPositions(accessToken, currency, kind);
             break;
         }
         case 7:
@@ -1083,7 +1088,7 @@ int main()
             {
                 client.connectWebSocket();
                 std::this_thread::sleep_for(std::chrono::seconds(2)); // Wait for connection
-                client.subscribeToOrderBook(instrument, duration);
+                client.subOrderBook(instrument, duration);
                 std::this_thread::sleep_for(std::chrono::seconds(duration));
             }
             else

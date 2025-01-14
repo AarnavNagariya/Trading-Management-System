@@ -36,13 +36,13 @@ The Trading Manager is a comprehensive trading system that provides functionalit
 
 ### TradingManager
 
-*   **SendRequest:** Sends a request using the connection pool, rate limiter, and circuit breaker. It checks if the rate limiter should throttle the request, executes the request using the circuit breaker, acquires a connection from the pool, sets the request URL, method, and payload, sets the request headers, sets the write callback function, performs the cURL request, checks the response code, releases the connection back to the pool, and returns the response string. It also handles any exceptions and releases the connection.
-*   **OnMessage:** Handles a WebSocket message by parsing the message payload into a JSON object, checking if the message contains params and data, and enqueuing the message processing task to the thread pool. It also measures the message processing latency.
+*   **send_request:** Sends a request using the connection pool, rate limiter, and circuit breaker. It checks if the rate limiter should throttle the request, executes the request using the circuit breaker, acquires a connection from the pool, sets the request URL, method, and payload, sets the request headers, sets the write callback function, performs the cURL request, checks the response code, releases the connection back to the pool, and returns the response string. It also handles any exceptions and releases the connection.
+*   **ws_message:** Handles a WebSocket message by parsing the message payload into a JSON object, checking if the message contains params and data, and enqueuing the message processing task to the thread pool. It also measures the message processing latency.
 *   **ProcessWebSocketMessage:** Processes a WebSocket message by incrementing the update counter, printing the update counter, checking if the response contains params and data, printing the received data structure, and processing the order book data.
 *   **ProcessOrderBookData:** Updates the order book with the received data.
 *   **ConnectWebSocket:** Connects to the WebSocket by stopping and joining the previous connection if any, resetting and reinitializing the WebSocket client, setting the event handlers, and creating the WebSocket connection and starting the client in a new thread.
 *   **SendWebSocketMessage:** Sends a message through the WebSocket connection by checking if the connection is established, sending the message, and handling the case when the connection is not established.
-*   **SubscribeToOrderBook:** Subscribes to the order book by adding the instrument to the subscribed instruments set, constructing the subscription payload, sending the subscription message through the WebSocket, and starting a new thread to close the connection after the specified duration.
+*   **subOrderBook:** Subscribes to the order book by adding the instrument to the subscribed instruments set, constructing the subscription payload, sending the subscription message through the WebSocket, and starting a new thread to close the connection after the specified duration.
 
 
 # Code Documentation 
@@ -236,7 +236,7 @@ The **TradingManager** class is a high-level component designed for managing tra
 
 ### **Core Methods**
 
-#### `sendRequest`
+#### `send_request`
 - Sends a REST API request to the specified endpoint.
 - **Parameters**:
   - `endpoint`: API endpoint relative to `baseUrl`.
@@ -304,7 +304,7 @@ The **TradingManager** class is a high-level component designed for managing tra
      - Ensures the WebSocket is connected before sending.
      - Logs an error if the WebSocket is not connected.
 
-3. `on_open`:
+3. `ws_onOpen`:
    - **Purpose**: Handler triggered when the WebSocket connection is established.
    - **Parameters**:
      - `hdl`: WebSocket connection handle.
@@ -312,7 +312,7 @@ The **TradingManager** class is a high-level component designed for managing tra
      - Sets the connection handle (`hdl`).
      - Marks the WebSocket as connected.
 
-4. `on_close`:
+4. `ws_onClose`:
    - **Purpose**: Handler triggered when the WebSocket connection is closed.
    - **Parameters**:
      - `hdl`: WebSocket connection handle.
@@ -323,7 +323,7 @@ The **TradingManager** class is a high-level component designed for managing tra
 
 #### **Subscription Management**
 
-1. `subscribeToOrderBook`:
+1. `subOrderBook`:
    - **Purpose**: Subscribes to an order book for a specified instrument.
    - **Parameters**:
      - `instrument`: The instrument to subscribe to.
@@ -371,7 +371,7 @@ This trading client is designed for robust, high-performance interaction with th
 
 ## TradingManager : Wrapper Functions
 
-### `placeOrder`
+### `putOrder`
 
 #### Description:
 Places a limit order for a specified instrument with a given price and amount.
@@ -384,7 +384,7 @@ Places a limit order for a specified instrument with a given price and amount.
 
 #### Behavior:
 - Constructs a JSON payload for the order request.
-- Sends the request using `sendRequest` and measures latency.
+- Sends the request using `send_request` and measures latency.
 - Parses the response to check for errors or success.
 
 #### Output:
@@ -392,7 +392,7 @@ Places a limit order for a specified instrument with a given price and amount.
 
 ---
 
-### `getAllOpenOrders`
+### `allOpenOrders`
 
 #### Description:
 Retrieves a list of all open orders.
@@ -413,7 +413,7 @@ None.
 
 ---
 
-### `cancelOrder`
+### `removeOrder`
 
 #### Description:
 Cancels an order using its ID.
@@ -472,7 +472,7 @@ Fetches the order book for a specific instrument up to a specified depth.
 
 ---
 
-### `getPositions`
+### `fetchPositions`
 
 #### Description:
 Retrieves the positions for a specified currency and kind.

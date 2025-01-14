@@ -65,7 +65,7 @@ int extractOrderLatencyFromOutput(const std::string& output) {
 
 
 // Function to place an order and log the latency
-void placeOrderAndLogLatency(std::ofstream& outputFile) {
+void putOrderAndLogLatency(std::ofstream& outputFile) {
     std::string instrument = getRandomText();
     int price = 10000;
     int amount = 10;
@@ -106,7 +106,7 @@ void Calculate_Order_Latency(int n = 100, int delay = 100) {
     
     for (int i = 0; i < NUM_ITERATIONS; ++i) {
         // Measure order latency
-        placeOrderAndLogLatency(orderFile);
+        putOrderAndLogLatency(orderFile);
         
         
         // Add a small delay between measurements
@@ -314,7 +314,7 @@ int extractCancellationLatencyFromOutput(const std::string& output) {
 }
 
 // Function to cancel an order and log the latency
-void cancelOrderAndLogLatency(const std::string& orderID, std::ofstream& outputFile) {
+void removeOrderAndLogLatency(const std::string& orderID, std::ofstream& outputFile) {
     std::stringstream cmd;
     cmd << "(echo 5 && echo " << orderID 
         << " && echo 9) | ./TradingClient";
@@ -365,7 +365,7 @@ void Calculate_Cancellation_Latency() {
 
         // Process each order ID
         for (const auto& orderID : orderIDs) {
-            cancelOrderAndLogLatency(orderID, cancellationFile);
+            removeOrderAndLogLatency(orderID, cancellationFile);
             // Add a small delay between cancellations
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
