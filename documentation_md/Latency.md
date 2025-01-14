@@ -1,17 +1,15 @@
 # Trading System Latency Benchmark Tool
 
 ## Introduction
-The benchmark.cpp implementation represents a comprehensive latency measurement tool designed for trading systems. Its primary purpose is to evaluate and analyze the performance of various trading operations by measuring their execution latencies. The tool interfaces with a TradingClient program to conduct performance measurements across different trading operations including order placement, modification, cancellation, and market data processing.
+The benchmark.cpp implementation represents a comprehensive latency measurement tool designed for trading system. Its primary purpose is to evaluate and analyze the performance of various trading operations by measuring their execution latencies. The tool interfaces with a TradingManager program to conduct performance measurements across different trading operations including order placement, modification, cancellation, and market data processing.
 
 ## Purpose and Objectives
 The main objectives of this benchmarking tool are:
 - Measure and analyze latencies for critical trading operations
 - Generate detailed performance metrics for system evaluation
-- Provide comprehensive reporting of trading system performance
-- Enable systematic performance testing through automated measurement processes
 
 ## System Overview
-The benchmark tool is designed to interact with a TradingClient application and measures five key types of latencies:
+The benchmark tool is designed to interact with a TradingManager application and measures five key types of latencies:
 - Order placement latency
 - Order modification latency
 - Order cancellation latency
@@ -119,5 +117,20 @@ The system generates:
 - Real-time progress reporting
 - Aggregate performance metrics
 
-## Conclusions
-The benchmark tool provides a comprehensive solution for measuring trading system performance across various operations. Its modular design and extensive error handling make it suitable for systematic performance evaluation and monitoring of trading systems. The tool's ability to measure different aspects of trading operations makes it valuable for both development and production environment testing.
+## Results
+
+Optimization was done on this tool to improve the performance of the trading system. The following table shows the latency values before and after optimization:
+
+| Latency Type                | Before Optimization | After Optimization |
+|-----------------------------|---------------------|---------------------|
+| Orders Placed               | 502.89 ms           | 165.83 ms           |
+| Orderbook / Market Data     | 506.03 ms           | 163.47 ms           |
+| Modification                | 504.455 ms          | 166.886 ms          |
+| Cancellation                | 493.326 ms          | 166.057 ms          |
+| Web Socket Propagation Delay| 3744.423 µs (3.74 ms)| 2299.02 µs (2.3 ms) |
+| Positions Latency           | 504.455 ms          | 144.32 ms        |
+| Trading Loop Latency        | 501.86 ms           | 132.908 ms          |
+
+The optimization has significantly reduced the latencies for all operations, leading to improved system performance and responsiveness.
+
+In order to know more about optimization refer to [Optimization.md](Optimization.md)

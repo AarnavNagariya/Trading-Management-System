@@ -1,4 +1,8 @@
-### Components of the Trading System
+# Overview
+
+The Trading Manager is a comprehensive trading system that provides functionalities for order management, market data processing, and WebSocket communication. The system is designed to interact with a cryptocurrency exchange API to perform trading operations such as order placement, modification, and cancellation, as well as real-time market data processing.
+
+## Components of the Trading System
 
 1.  **ConnectionPool:** Manages a pool of CURL connections to optimize network requests.
 2.  **OrderBook:** Processes and maintains the order book data.
@@ -7,6 +11,7 @@
 5.  **TradingManager:** The main class that handles the trading logic, including WebSocket communication, order management, and position retrieval.
 6.  **TradingManager::ThreadPool:** A thread pool used to handle asynchronous processing of WebSocket messages.
 
+![Trading Manager System Flow](../figures/Trading_Manager_Flow.png)
 
 
 ### ConnectionPool
@@ -38,10 +43,3 @@
 *   **SendWebSocketMessage:** Sends a message through the WebSocket connection by checking if the connection is established, sending the message, and handling the case when the connection is not established.
 *   **SubscribeToOrderBook:** Subscribes to the order book by adding the instrument to the subscribed instruments set, constructing the subscription payload, sending the subscription message through the WebSocket, and starting a new thread to close the connection after the specified duration.
 
-### Main
-
-*   **Start:** Starts the program by getting the client ID and secret, creating the `TradingManager` instance, and calling the `authenticate` method.
-*   **Authenticate:** Checks if the access token was retrieved successfully and proceeds to the main loop if the authentication was successful.
-*   **MainLoop:** Displays the menu options, gets the user's choice, and handles the user's choice by calling the corresponding methods in the `TradingManager`.
-
-The flow diagram provides a comprehensive visual representation of the code's structure, logic, and interactions between the different components. It highlights the key functionalities, decision points, and error handling mechanisms within the `TradingManager` class and the overall program flow.

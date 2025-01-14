@@ -193,6 +193,39 @@ After installation, verify the setup:
 3. Network connectivity is available
 4. Compiler supports C++17 features
 
+## Latency Measurement
+
+To measure latency, follow these steps:
+1. Run `benchmark.cpp`
+```
+g++ benchmark.cpp
+./a.out
+```
+2. Select the latency type (orders placed, modification, cancellation, etc.)
+```
+Trading System Latency Benchmark Tool;
+====================================
+1. Measure Order Placement Latency
+2. Measure Order Book Latency
+3. Measure Order Modification Latency
+4. Measure Order Cancellation Latency
+5. Measure Web Socket Latency
+6. Fetch Order IDs
+7. Run All Benchmarks
+8. Exit
+Choice: 
+```
+3. It will then return the average latency.
+
+```
+Average Order PLaced Latency: 165.83ms
+Average Orderbook Latency: 163.47ms
+Average Modification Latency: 166.886ms
+Average Cancellation Latency: 166.057ms
+Average Web Socket Latency: 2299.02us
+Trading Loop Latency: 132.908ms
+```
+
 ## Troubleshooting
 
 Common issues and solutions:
@@ -217,5 +250,6 @@ Common issues and solutions:
 
 For additional support:
 - Consult library-specific documentation
-- Contact system administrators for environment-specific issues
+- Check system requirements and installation guide
+- Refer to the documentation in Documentation.pdf.
 - Report bugs and feature requests at this [email](mailto:nagariyaaarnav@gmail.com)
